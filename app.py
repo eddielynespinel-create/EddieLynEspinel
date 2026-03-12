@@ -1,13 +1,13 @@
-from flask import Flask, jsonify, request, render_template_string, redirect, url_for
+from flask import Flask, jsonify, request, render_template, redirect, url_for
 import uuid
+
 app = Flask(__name__)
 
-# Data storage
+# --- Data Storage ---
 students = []
 grades = []
 
 # --- Helper Functions ---
-
 def get_student_grades(student_id):
     return [g for g in grades if g["student_id"] == student_id]
 
@@ -18,23 +18,23 @@ def calculate_average(student_id):
     return round(sum(g["score"] for g in student_grades) / len(student_grades), 2)
 
 # --- Routes ---
-
 @app.route('/')
 def home():
-    # Pass necessary data to the template
-    return render_template_string(HTML_TEMPLATE, 
-                                  students=students, 
-                                  grades=grades,
-                                  get_student_grades=get_student_grades,
-                                  calculate_average=calculate_average)
+    return render_template('index.html',
+                           students=students,
+                           grades=grades,
+                           get_student_grades=get_student_grades,
+                           calculate_average=calculate_average)
 
-# API: Add Student
+# --- API Routes ---
+
+# Add Student
 @app.route('/api/student/add', methods=['POST'])
 def api_add_student():
     data = request.json
     if not data or not all(k in data for k in ['name', 'age', 'section']):
         return jsonify({"error": "Missing data"}), 400
-    
+
     new_student = {
         "id": str(uuid.uuid4()),
         "name": data['name'],
@@ -44,20 +44,20 @@ def api_add_student():
     students.append(new_student)
     return jsonify({"success": True, "student": new_student})
 
-# API: Edit Student
+# Edit Student
 @app.route('/api/student/edit/<student_id>', methods=['POST'])
 def api_edit_student(student_id):
     data = request.json
     student = next((s for s in students if s["id"] == student_id), None)
     if not student:
         return jsonify({"error": "Student not found"}), 404
-    
+
     student["name"] = data.get("name", student["name"])
     student["age"] = int(data.get("age", student["age"]))
     student["section"] = data.get("section", student["section"])
     return jsonify({"success": True, "student": student})
 
-# API: Delete Student
+# Delete Student
 @app.route('/api/student/delete/<student_id>', methods=['DELETE'])
 def api_delete_student(student_id):
     global students, grades
@@ -65,7 +65,7 @@ def api_delete_student(student_id):
     grades = [g for g in grades if g["student_id"] != student_id]
     return jsonify({"success": True})
 
-# API: Add Grade
+# Add Grade
 @app.route('/api/grade/add', methods=['POST'])
 def api_add_grade():
     data = request.json
@@ -573,5 +573,6 @@ HTML_TEMPLATE = """
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
