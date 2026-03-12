@@ -1,3 +1,6 @@
+from flask import Flask, jsonify, request, render_template_string, redirect, url_for
+import uuid
+
 app = Flask(__name__)
 
 # Data storage
@@ -571,3 +574,4 @@ HTML_TEMPLATE = """
 
 if __name__ == "__main__":
     app.run(debug=True)
+
