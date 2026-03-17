@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string, redirect
+from flask import Flask, request, jsonify, render_template_string
 from flask_sqlalchemy import SQLAlchemy
 import uuid
 
@@ -48,35 +48,22 @@ def api_add_student():
     data = request.json
     if not data or not all(k in data for k in ['name', 'age', 'section']):
         return jsonify({"error": "Missing data"}), 400
-
-    new_student = Student(
-        id=str(uuid.uuid4()),
-        name=data['name'],
-        age=int(data['age']),
-        section=data['section']
-    )
+    new_student = Student(id=str(uuid.uuid4()), name=data['name'], age=int(data['age']), section=data['section'])
     db.session.add(new_student)
     db.session.commit()
-    return jsonify({"success": True, "student": {
-        "id": new_student.id, "name": new_student.name,
-        "age": new_student.age, "section": new_student.section
-    }})
+    return jsonify({"success": True, "student": {"id": new_student.id, "name": new_student.name, "age": new_student.age, "section": new_student.section}})
 
 @app.route('/api/student/edit/<student_id>', methods=['POST'])
 def api_edit_student(student_id):
     student = Student.query.get(student_id)
     if not student:
         return jsonify({"error": "Student not found"}), 404
-
     data = request.json
     student.name = data.get("name", student.name)
     student.age = int(data.get("age", student.age))
     student.section = data.get("section", student.section)
     db.session.commit()
-    return jsonify({"success": True, "student": {
-        "id": student.id, "name": student.name,
-        "age": student.age, "section": student.section
-    }})
+    return jsonify({"success": True, "student": {"id": student.id, "name": student.name, "age": student.age, "section": student.section}})
 
 @app.route('/api/student/delete/<student_id>', methods=['DELETE'])
 def api_delete_student(student_id):
@@ -90,23 +77,15 @@ def api_delete_student(student_id):
 @app.route('/api/grade/add', methods=['POST'])
 def api_add_grade():
     data = request.json
-    new_grade = Grade(
-        id=str(uuid.uuid4()),
-        student_id=data["student_id"],
-        subject=data["subject"],
-        score=int(data["score"])
-    )
+    new_grade = Grade(id=str(uuid.uuid4()), student_id=data["student_id"], subject=data["subject"], score=int(data["score"]))
     db.session.add(new_grade)
     db.session.commit()
-    return jsonify({"success": True, "grade": {
-        "id": new_grade.id, "student_id": new_grade.student_id,
-        "subject": new_grade.subject, "score": new_grade.score
-    }})
+    return jsonify({"success": True, "grade": {"id": new_grade.id, "student_id": new_grade.student_id, "subject": new_grade.subject, "score": new_grade.score}})
 
 # --- HTML Template ---
 HTML_TEMPLATE = """ 
-<!-- Paste your full original HTML here, unchanged -->
-<!-- Make sure to use Jinja syntax for students, grades, and functions -->
+<!-- Paste your full student dashboard HTML here -->
+<!-- Keep your Jinja template variables intact for students, grades, and helper functions -->
 """
 
 if __name__ == "__main__":
