@@ -156,8 +156,16 @@ body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verda
 <strong>{{ student.name }}</strong></div></td>
 <td>{{ student.age }}</td>
 <td><span class="badge bg-light text-dark">{{ student.section }}</span></td>
-<td>{% for g in get_student_grades(student.id) %}{% set cls = 'low' if g.score < 50 else ('med' if g.score < 75 else 'high') %}<span class="badge grade-badge {{ cls }}">{{ g.subject }}: {{ g.score }}</span>{% endfor %}{% if not get_student_grades(student.id) %}<span class="text-muted small">No grades</span>{% endif %}</td>
-<td><strong>{{ calculate_average(student.id) }}</strong></td>
+<td>
+{% for g in student.grades %}
+{% set cls = 'low' if g.score < 50 else ('med' if g.score < 75 else 'high') %}
+<span class="badge grade-badge {{ cls }}">{{ g.subject }}: {{ g.score }}</span>
+{% endfor %}
+{% if not student.grades %}
+<span class="text-muted small">No grades</span>
+{% endif %}
+</td>
+<td><strong>{{ calculate_average(student) }}</strong></td>
 <td>
 <button class="btn btn-sm btn-outline-primary btn-action" onclick="editStudent('{{ student.id }}', '{{ student.name }}', '{{ student.age }}', '{{ student.section }}')"><i class="bi bi-pencil"></i></button>
 <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteStudent('{{ student.id }}')"><i class="bi bi-trash"></i></button>
@@ -197,11 +205,125 @@ body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verda
 </main>
 
 <!-- Modals -->
-<!-- Add, Edit, Grade modals (copy all your previous modal HTML here) -->
+<!-- Add Student Modal -->
+<div class="modal fade" id="addStudentModal" tabindex="-1">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">Add New Student</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+<form id="addStudentForm">
+<div class="mb-3"><label class="form-label">Name</label><input type="text" class="form-control" name="name" required></div>
+<div class="mb-3"><label class="form-label">Age</label><input type="number" class="form-control" name="age" required></div>
+<div class="mb-3"><label class="form-label">Section</label><input type="text" class="form-control" name="section" required></div>
+</form>
+</div>
+<div class="modal-footer">
+<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+<button type="button" class="btn btn-primary" onclick="submitAddStudent()">Save Student</button>
+</div>
+</div>
+</div>
+</div>
 
+<!-- Edit Student Modal -->
+<div class="modal fade" id="editStudentModal" tabindex="-1">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">Edit Student</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+<form id="editStudentForm">
+<input type="hidden" name="id" id="edit-student-id">
+<div class="mb-3"><label class="form-label">Name</label><input type="text" class="form-control" name="name" id="edit-student-name" required></div>
+<div class="mb-3"><label class="form-label">Age</label><input type="number" class="form-control" name="age" id="edit-student-age" required></div>
+<div class="mb-3"><label class="form-label">Section</label><input type="text" class="form-control" name="section" id="edit-student-section" required></div>
+</form>
+</div>
+<div class="modal-footer">
+<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+<button type="button" class="btn btn-primary" onclick="submitEditStudent()">Update</button>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Add Grade Modal -->
+<div class="modal fade" id="addGradeModal" tabindex="-1">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">Add Grade</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+<form id="addGradeForm">
+<div class="mb-3"><label class="form-label">Student</label>
+<select class="form-select" name="student_id" required>
+{% for student in students %}
+<option value="{{ student.id }}">{{ student.name }} ({{ student.section }})</option>
+{% endfor %}
+</select>
+</div>
+<div class="mb-3"><label class="form-label">Subject</label><input type="text" class="form-control" name="subject" placeholder="e.g., Mathematics" required></div>
+<div class="mb-3"><label class="form-label">Score (0-100)</label><input type="number" class="form-control" name="score" min="0" max="100" required></div>
+</form>
+</div>
+<div class="modal-footer">
+<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+<button type="button" class="btn btn-primary" onclick="submitAddGrade()">Save Grade</button>
+</div>
+</div>
+</div>
+</div>
+
+<!-- JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// Copy your JS functions (modals, API calls, chart) exactly as before
+const addStudentModal = new bootstrap.Modal(document.getElementById('addStudentModal'));
+const editStudentModal = new bootstrap.Modal(document.getElementById('editStudentModal'));
+const addGradeModal = new bootstrap.Modal(document.getElementById('addGradeModal'));
+
+function openAddStudentModal(){document.getElementById('addStudentForm').reset(); addStudentModal.show();}
+function openAddGradeModal(){document.getElementById('addGradeForm').reset(); addGradeModal.show();}
+function editStudent(id,name,age,section){document.getElementById('edit-student-id').value=id; document.getElementById('edit-student-name').value=name; document.getElementById('edit-student-age').value=age; document.getElementById('edit-student-section').value=section; editStudentModal.show();}
+
+function submitAddStudent(){
+const form= document.getElementById('addStudentForm');
+const data= Object.fromEntries(new FormData(form));
+fetch('/api/student/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
+.then(res=>res.json()).then(resp=>{if(resp.success) location.reload();});
+}
+
+function submitEditStudent(){
+const form= document.getElementById('editStudentForm');
+const id=form.id.value;
+const data= Object.fromEntries(new FormData(form));
+fetch(`/api/student/edit/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
+.then(res=>res.json()).then(resp=>{if(resp.success) location.reload();});
+}
+
+function deleteStudent(id){
+if(confirm('Are you sure you want to delete this student and all their grades?')){
+fetch(`/api/student/delete/${id}`,{method:'DELETE'}).then(res=>res.json()).then(resp=>{if(resp.success) location.reload();});}
+}
+
+function submitAddGrade(){
+const form= document.getElementById('addGradeForm');
+const data= Object.fromEntries(new FormData(form));
+fetch('/api/grade/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
+.then(res=>res.json()).then(resp=>{if(resp.success) location.reload();});
+}
+
+// Chart
+const ctx=document.getElementById('performanceChart');
+const gradeScores={{ grades | map(attribute='score') | list | tojson }};
+const subjects={{ grades | map(attribute='subject') | list | tojson }};
+new Chart(ctx,{type:'line',data:{labels:subjects.slice(-10),datasets:[{label:'Score',data:gradeScores.slice(-10),borderColor:'#764ba2',backgroundColor:'rgba(118,75,162,0.2)',tension:0.4,fill:true}]} ,options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:100}}}});
 </script>
 
 </body>
