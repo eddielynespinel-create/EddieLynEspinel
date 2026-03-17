@@ -39,15 +39,10 @@ def home():
 @app.route('/api/student/add', methods=['POST'])
 def api_add_student():
     data = request.json
-    new_student = Student(
-        id=str(uuid.uuid4()),
-        name=data['name'],
-        age=int(data['age']),
-        section=data['section']
-    )
+    new_student = Student(id=str(uuid.uuid4()), name=data['name'], age=int(data['age']), section=data['section'])
     db.session.add(new_student)
     db.session.commit()
-    return jsonify({"success": True, "student": {"id": new_student.id, "name": new_student.name, "section": new_student.section, "age": new_student.age}})
+    return jsonify({"success": True, "student": {"id": new_student.id, "name": new_student.name}})
 
 @app.route('/api/student/edit/<student_id>', methods=['POST'])
 def api_edit_student(student_id):
@@ -59,7 +54,7 @@ def api_edit_student(student_id):
     student.age = int(data.get('age', student.age))
     student.section = data.get('section', student.section)
     db.session.commit()
-    return jsonify({"success": True, "student": {"id": student.id, "name": student.name, "section": student.section, "age": student.age}})
+    return jsonify({"success": True})
 
 @app.route('/api/student/delete/<student_id>', methods=['DELETE'])
 def api_delete_student(student_id):
@@ -72,9 +67,6 @@ def api_delete_student(student_id):
 @app.route('/api/grade/add', methods=['POST'])
 def api_add_grade():
     data = request.json
-    student = Student.query.get(data.get('student_id'))
-    if not student:
-        return jsonify({"error": "Student not found"}), 400
     new_grade = Grade(
         id=str(uuid.uuid4()),
         student_id=data['student_id'],
@@ -83,11 +75,7 @@ def api_add_grade():
     )
     db.session.add(new_grade)
     db.session.commit()
-    return jsonify({"success": True, "grade": {"subject": new_grade.subject, "score": new_grade.score, "student_id": new_grade.student_id}})
-
-# --- Create Database ---
-with app.app_context():
-    db.create_all()
+    return jsonify({"success": True})
 
 # --- HTML Template ---
 HTML_TEMPLATE = """
@@ -132,7 +120,6 @@ body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verda
 <div class="stat-card"><h5>Class Average</h5>
 <h3>{% set total_score = grades | sum(attribute='score') %}{% set count = grades | length %}{{ (total_score / count) | round(1) if count > 0 else 0 }}%</h3></div>
 <div class="mt-4">
-<h6 class="text-uppercase text-white-50 mb-3" style="font-size: 0.8rem;">Quick Actions</h6>
 <button class="btn btn-light w-100 mb-2 text-start" onclick="openAddStudentModal()"><i class="bi bi-person-plus me-2"></i> Add Student</button>
 <button class="btn btn-light w-100 text-start" onclick="openAddGradeModal()"><i class="bi bi-journal-plus me-2"></i> Add Grade</button>
 </div>
@@ -140,15 +127,13 @@ body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verda
 
 <!-- Main Content -->
 <main class="main-content">
-<div class="d-flex justify-content-between align-items-center mb-4">
-<div><h2 class="mb-1">Student Management</h2><p class="text-muted">Manage your classroom data efficiently</p></div>
-</div>
+<h2>Student Management</h2>
+<p class="text-muted">Manage your classroom data efficiently</p>
 
 <div class="row">
-<!-- Students Table -->
 <div class="col-lg-8">
 <div class="card">
-<div class="card-header d-flex justify-content-between align-items-center">
+<div class="card-header d-flex justify-content-between">
 <span>Student Directory</span>
 <span class="badge bg-primary rounded-pill">{{ students|length }} Students</span>
 </div>
@@ -156,60 +141,33 @@ body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verda
 <div class="table-responsive">
 <table class="table table-hover">
 <thead>
-<tr>
-<th>Student</th><th>Age</th><th>Section</th><th>Performance</th><th>Avg</th><th>Actions</th>
-</tr>
+<tr><th>Student</th><th>Age</th><th>Section</th><th>Performance</th><th>Avg</th><th>Actions</th></tr>
 </thead>
 <tbody>
 {% for student in students %}
-<tr id="row-{{student.id}}">
-<td><div class="d-flex align-items-center">
-<div class="bg-secondary text-white rounded-circle d-flex justify-content-center align-items-center me-2" style="width: 40px; height: 40px;">{{ student.name[0] }}</div>
-<strong>{{ student.name }}</strong></div></td>
+<tr id="row-{{ student.id }}">
+<td>{{ student.name }}</td>
 <td>{{ student.age }}</td>
-<td><span class="badge bg-light text-dark">{{ student.section }}</span></td>
+<td>{{ student.section }}</td>
 <td>
 {% for g in student.grades %}
 {% set cls = 'low' if g.score < 50 else ('med' if g.score < 75 else 'high') %}
 <span class="badge grade-badge {{ cls }}">{{ g.subject }}: {{ g.score }}</span>
 {% endfor %}
-{% if not student.grades %}
-<span class="text-muted small">No grades</span>
-{% endif %}
+{% if not student.grades %}<span class="text-muted small">No grades</span>{% endif %}
 </td>
-<td><strong>{{ calculate_average(student) }}</strong></td>
+<td>{{ calculate_average(student) }}</td>
 <td>
-<button class="btn btn-sm btn-outline-primary btn-action" onclick="editStudent('{{ student.id }}', '{{ student.name }}', '{{ student.age }}', '{{ student.section }}')"><i class="bi bi-pencil"></i></button>
-<button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteStudent('{{ student.id }}')"><i class="bi bi-trash"></i></button>
+<button class="btn btn-sm btn-outline-primary" onclick="editStudent('{{ student.id }}', '{{ student.name }}', '{{ student.age }}', '{{ student.section }}')"><i class="bi bi-pencil"></i></button>
+<button class="btn btn-sm btn-outline-danger" onclick="deleteStudent('{{ student.id }}')"><i class="bi bi-trash"></i></button>
 </td>
 </tr>
 {% else %}
-<tr><td colspan="6" class="text-center text-muted py-5">No students found. Click "Add Student" to begin.</td></tr>
+<tr><td colspan="6" class="text-center">No students yet.</td></tr>
 {% endfor %}
 </tbody>
 </table>
 </div>
-</div>
-</div>
-</div>
-
-<!-- Charts / Analytics -->
-<div class="col-lg-4">
-<div class="card"><div class="card-header">Performance Distribution</div>
-<div class="card-body"><div class="chart-container"><canvas id="performanceChart"></canvas></div></div></div>
-<div class="card"><div class="card-header">Recent Grades</div>
-<div class="card-body p-0">
-<ul class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
-{% for g in grades[-5:] %}
-<li class="list-group-item d-flex justify-content-between align-items-center">
-<div><strong>{{ g.subject }}</strong><br>
-<small class="text-muted">{{ g.student.name if g.student else 'Unknown' }}</small></div>
-<span class="badge bg-primary rounded-pill">{{ g.score }}</span>
-</li>
-{% else %}
-<li class="list-group-item text-center text-muted">No grades yet</li>
-{% endfor %}
-</ul>
 </div>
 </div>
 </div>
@@ -218,98 +176,128 @@ body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verda
 
 <!-- Add Student Modal -->
 <div class="modal fade" id="addStudentModal" tabindex="-1">
-<div class="modal-dialog"><div class="modal-content">
-<div class="modal-header"><h5 class="modal-title">Add New Student</h5>
-<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">Add Student</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body">
 <form id="addStudentForm">
-<div class="mb-3"><label class="form-label">Name</label><input type="text" class="form-control" name="name" required></div>
-<div class="mb-3"><label class="form-label">Age</label><input type="number" class="form-control" name="age" required></div>
-<div class="mb-3"><label class="form-label">Section</label><input type="text" class="form-control" name="section" required></div>
-</form></div>
+<div class="mb-3"><label>Name</label><input type="text" name="name" class="form-control" required></div>
+<div class="mb-3"><label>Age</label><input type="number" name="age" class="form-control" required></div>
+<div class="mb-3"><label>Section</label><input type="text" name="section" class="form-control" required></div>
+</form>
+</div>
 <div class="modal-footer">
-<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-<button type="button" class="btn btn-primary" onclick="submitAddStudent()">Save Student</button>
-</div></div></div></div>
+<button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+<button class="btn btn-primary" onclick="submitAddStudent()">Save</button>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Edit Student Modal -->
+<div class="modal fade" id="editStudentModal" tabindex="-1">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">Edit Student</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+<form id="editStudentForm">
+<input type="hidden" name="id" id="edit-student-id">
+<div class="mb-3"><label>Name</label><input type="text" name="name" id="edit-student-name" class="form-control" required></div>
+<div class="mb-3"><label>Age</label><input type="number" name="age" id="edit-student-age" class="form-control" required></div>
+<div class="mb-3"><label>Section</label><input type="text" name="section" id="edit-student-section" class="form-control" required></div>
+</form>
+</div>
+<div class="modal-footer">
+<button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+<button class="btn btn-primary" onclick="submitEditStudent()">Update</button>
+</div>
+</div>
+</div>
+</div>
 
 <!-- Add Grade Modal -->
 <div class="modal fade" id="addGradeModal" tabindex="-1">
-<div class="modal-dialog"><div class="modal-content">
-<div class="modal-header"><h5 class="modal-title">Add Grade</h5>
-<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">Add Grade</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body">
 <form id="addGradeForm">
-<div class="mb-3">
-<label class="form-label">Student</label>
-<select class="form-select" name="student_id" required>
+<div class="mb-3"><label>Student</label>
+<select name="student_id" class="form-select" required>
 {% for student in students %}
-<option value="{{ student.id }}">{{ student.name }} ({{ student.section }})</option>
+<option value="{{ student.id }}">{{ student.name }}</option>
 {% endfor %}
 </select>
 </div>
-<div class="mb-3"><label class="form-label">Subject</label><input type="text" class="form-control" name="subject" placeholder="e.g., Mathematics" required></div>
-<div class="mb-3"><label class="form-label">Score (0-100)</label><input type="number" class="form-control" name="score" min="0" max="100" required></div>
-</form></div>
+<div class="mb-3"><label>Subject</label><input type="text" name="subject" class="form-control" required></div>
+<div class="mb-3"><label>Score</label><input type="number" name="score" class="form-control" min="0" max="100" required></div>
+</form>
+</div>
 <div class="modal-footer">
-<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-<button type="button" class="btn btn-primary" onclick="submitAddGrade()">Save Grade</button>
-</div></div></div></div>
+<button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+<button class="btn btn-primary" onclick="submitAddGrade()">Save</button>
+</div>
+</div>
+</div>
+</div>
 
-<!-- Bootstrap & JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// Modal instances
+// Modals
 const addStudentModal = new bootstrap.Modal(document.getElementById('addStudentModal'));
+const editStudentModal = new bootstrap.Modal(document.getElementById('editStudentModal'));
 const addGradeModal = new bootstrap.Modal(document.getElementById('addGradeModal'));
 
-function openAddStudentModal(){document.getElementById('addStudentForm').reset(); addStudentModal.show();}
-function openAddGradeModal(){document.getElementById('addGradeForm').reset(); addGradeModal.show();}
+function openAddStudentModal(){ document.getElementById('addStudentForm').reset(); addStudentModal.show(); }
+function openAddGradeModal(){ document.getElementById('addGradeForm').reset(); addGradeModal.show(); }
 
-// --- API Calls ---
+function editStudent(id,name,age,section){
+    document.getElementById('edit-student-id').value = id;
+    document.getElementById('edit-student-name').value = name;
+    document.getElementById('edit-student-age').value = age;
+    document.getElementById('edit-student-section').value = section;
+    editStudentModal.show();
+}
+
 function submitAddStudent(){
     const form = document.getElementById('addStudentForm');
     const data = Object.fromEntries(new FormData(form));
     data.age = parseInt(data.age);
-    fetch('/api/student/add',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)})
-    .then(res=>res.json()).then(resp=>{ if(resp.success) location.reload(); else alert("Error adding student"); });
+    fetch('/api/student/add', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)})
+    .then(r=>r.json()).then(resp=>{ if(resp.success) location.reload(); });
+}
+
+function submitEditStudent(){
+    const form = document.getElementById('editStudentForm');
+    const data = Object.fromEntries(new FormData(form));
+    data.age = parseInt(data.age);
+    const id = data.id;
+    fetch(`/api/student/edit/${id}`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)})
+    .then(r=>r.json()).then(resp=>{ if(resp.success) location.reload(); });
+}
+
+function deleteStudent(id){
+    if(confirm('Delete this student and all grades?')){
+        fetch(`/api/student/delete/${id}`, {method:'DELETE'})
+        .then(r=>r.json()).then(resp=>{ if(resp.success) location.reload(); });
+    }
 }
 
 function submitAddGrade(){
     const form = document.getElementById('addGradeForm');
     const data = Object.fromEntries(new FormData(form));
     data.score = parseInt(data.score);
-    fetch('/api/grade/add',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)})
-    .then(res=>res.json()).then(resp=>{ if(resp.success) location.reload(); else alert("Error adding grade"); });
+    fetch('/api/grade/add', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)})
+    .then(r=>r.json()).then(resp=>{ if(resp.success) location.reload(); });
 }
-
-function editStudent(id,name,age,section){
-    const nameInput = prompt("Edit name:",name);
-    if(nameInput===null) return;
-    const ageInput = prompt("Edit age:",age);
-    if(ageInput===null) return;
-    const sectionInput = prompt("Edit section:",section);
-    if(sectionInput===null) return;
-    fetch(`/api/student/edit/${id}`,{
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({name:nameInput,age:parseInt(ageInput),section:sectionInput})
-    }).then(res=>res.json()).then(()=>location.reload());
-}
-
-function deleteStudent(id){
-    if(confirm('Delete this student and all grades?')){
-        fetch(`/api/student/delete/${id}`,{method:'DELETE'}).then(()=>location.reload());
-    }
-}
-
-// --- Chart.js ---
-const ctx = document.getElementById('performanceChart');
-const scores = {{ grades | map(attribute='score') | list | tojson }};
-const subjects = {{ grades | map(attribute='subject') | list | tojson }};
-new Chart(ctx,{type:'line', data:{labels:subjects.slice(-10), datasets:[{label:'Score',data:scores.slice(-10), borderColor:'#764ba2', backgroundColor:'rgba(118,75,162,0.2)', tension:0.4, fill:true}]}, options:{responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true, max:100}}}});
 </script>
 </body>
 </html>
 """
+
+# --- Create Database ---
+with app.app_context():
+    db.create_all()
 
 if __name__ == "__main__":
     app.run(debug=True)
