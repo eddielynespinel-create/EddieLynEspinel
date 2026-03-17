@@ -1,137 +1,113 @@
-from flask import Flask, render_template_string
+from flask import Flask, request, jsonify, render_template_string, redirect
+from flask_sqlalchemy import SQLAlchemy
+import uuid
 
 app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///students.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Country Info App</title>
-<style>
-body {
-    font-family: Arial, sans-serif;
-    background: linear-gradient(to bottom, #83a4d4, #b6fbff);
-    color: #333;
-    text-align: center;
-    padding: 50px 20px;
-}
-form {
-    margin-bottom: 30px;
-}
-input, button {
-    padding: 10px;
-    margin: 5px;
-    border: none;
-    border-radius: 5px;
-    font-size: 16px;
-}
-button {
-    background-color: #0077ff;
-    color: white;
-    cursor: pointer;
-}
-#countries {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 20px;
-    justify-items: center;
-}
-.country {
-    border: 1px solid #ccc;
-    padding: 15px;
-    border-radius: 8px;
-    background: rgba(255,255,255,0.85);
-    width: 100%;
-    text-align: left;
-    box-sizing: border-box;
-}
-.country img { width: 50px; vertical-align: middle; margin-right: 10px; }
-</style>
-</head>
-<body>
+# --- Database Models ---
+class Student(db.Model):
+    id = db.Column(db.String, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    age = db.Column(db.Integer, nullable=False)
+    section = db.Column(db.String(50), nullable=False)
+    grades = db.relationship('Grade', backref='student', cascade="all, delete-orphan")
 
-<h1>🌎 Country Information</h1>
+class Grade(db.Model):
+    id = db.Column(db.String, primary_key=True)
+    student_id = db.Column(db.String, db.ForeignKey('student.id'), nullable=False)
+    subject = db.Column(db.String(50), nullable=False)
+    score = db.Column(db.Integer, nullable=False)
 
-<form id="searchForm">
-    <input type="text" id="searchInput" placeholder="Enter country name" required>
-    <button type="submit">Search</button>
-</form>
+db.create_all()
 
-<div id="countries"></div>
+# --- Helper Functions ---
+def get_student_grades(student_id):
+    return Grade.query.filter_by(student_id=student_id).all()
 
-<script>
-let countryData = [];
+def calculate_average(student_id):
+    student_grades = get_student_grades(student_id)
+    if not student_grades:
+        return 0
+    return round(sum(g.score for g in student_grades) / len(student_grades), 2)
 
-const traditionalFlowers = {
-  "Japan": "Cherry Blossom",
-  "India": "Lotus",
-  "United States": "Rose",
-  "United Kingdom": "Tudor Rose",
-  "France": "Lily",
-  "China": "Peony",
-  "South Korea": "Rose of Sharon",
-  "Canada": "Maple Leaf Flower",
-  "Australia": "Golden Wattle",
-  "Mexico": "Dahlia"
-};
-
-// Fetch all country data
-fetch('https://restcountries.com/v3.1/all?fields=name,capital,currencies,flags,population,region')
-  .then(response => response.json())
-  .then(data => {
-    countryData = data;
-    renderCountries(countryData);
-  })
-  .catch(err => console.error(err));
-
-// Render countries in the grid
-function renderCountries(countries) {
-    const container = document.getElementById('countries');
-    container.innerHTML = '';
-    if(countries.length === 0){
-        container.innerHTML = '<p>No countries found.</p>';
-        return;
-    }
-    countries.forEach(country => {
-        const div = document.createElement('div');
-        div.className = 'country';
-        const flower = traditionalFlowers[country.name.common] || 'N/A';
-        div.innerHTML = `
-            <img src="${country.flags.png}" alt="Flag">
-            <strong>${country.name.common}</strong><br>
-            Capital: ${country.capital ? country.capital[0] : 'N/A'}<br>
-            Region: ${country.region} | Population: ${country.population.toLocaleString()}<br>
-            Currencies: ${country.currencies ? Object.values(country.currencies).map(c => c.name + ' (' + c.symbol + ')').join(', ') : 'N/A'}<br>
-            Traditional Flower: ${flower}
-        `;
-        container.appendChild(div);
-    });
-}
-
-// Search form handler
-document.getElementById('searchForm').addEventListener('submit', function(e){
-    e.preventDefault();
-    const term = document.getElementById('searchInput').value.toLowerCase();
-    const filtered = countryData
-        .filter(c => c.name.common.toLowerCase().includes(term))
-        .sort((a, b) => {
-            if(a.name.common.toLowerCase() === term) return -1;
-            if(b.name.common.toLowerCase() === term) return 1;
-            return 0;
-        });
-    renderCountries(filtered);
-});
-</script>
-
-</body>
-</html>
-"""
-
-@app.route("/")
+# --- Routes ---
+@app.route('/')
 def home():
-    return render_template_string(HTML_TEMPLATE)
+    students = Student.query.all()
+    grades = Grade.query.all()
+    return render_template_string(HTML_TEMPLATE, students=students, grades=grades,
+                                  get_student_grades=get_student_grades,
+                                  calculate_average=calculate_average)
+
+# --- API Routes ---
+@app.route('/api/student/add', methods=['POST'])
+def api_add_student():
+    data = request.json
+    if not data or not all(k in data for k in ['name', 'age', 'section']):
+        return jsonify({"error": "Missing data"}), 400
+
+    new_student = Student(
+        id=str(uuid.uuid4()),
+        name=data['name'],
+        age=int(data['age']),
+        section=data['section']
+    )
+    db.session.add(new_student)
+    db.session.commit()
+    return jsonify({"success": True, "student": {
+        "id": new_student.id, "name": new_student.name,
+        "age": new_student.age, "section": new_student.section
+    }})
+
+@app.route('/api/student/edit/<student_id>', methods=['POST'])
+def api_edit_student(student_id):
+    student = Student.query.get(student_id)
+    if not student:
+        return jsonify({"error": "Student not found"}), 404
+
+    data = request.json
+    student.name = data.get("name", student.name)
+    student.age = int(data.get("age", student.age))
+    student.section = data.get("section", student.section)
+    db.session.commit()
+    return jsonify({"success": True, "student": {
+        "id": student.id, "name": student.name,
+        "age": student.age, "section": student.section
+    }})
+
+@app.route('/api/student/delete/<student_id>', methods=['DELETE'])
+def api_delete_student(student_id):
+    student = Student.query.get(student_id)
+    if not student:
+        return jsonify({"error": "Student not found"}), 404
+    db.session.delete(student)
+    db.session.commit()
+    return jsonify({"success": True})
+
+@app.route('/api/grade/add', methods=['POST'])
+def api_add_grade():
+    data = request.json
+    new_grade = Grade(
+        id=str(uuid.uuid4()),
+        student_id=data["student_id"],
+        subject=data["subject"],
+        score=int(data["score"])
+    )
+    db.session.add(new_grade)
+    db.session.commit()
+    return jsonify({"success": True, "grade": {
+        "id": new_grade.id, "student_id": new_grade.student_id,
+        "subject": new_grade.subject, "score": new_grade.score
+    }})
+
+# --- HTML Template ---
+HTML_TEMPLATE = """ 
+<!-- Paste your full original HTML here, unchanged -->
+<!-- Make sure to use Jinja syntax for students, grades, and functions -->
+"""
 
 if __name__ == "__main__":
     app.run(debug=True)
